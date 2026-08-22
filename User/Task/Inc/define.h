@@ -1,0 +1,38 @@
+#ifndef _DEFINE_H_
+#define _DEFINE_H_
+
+#define COM_RX_ID 0x300
+#define COM_TX_ID 0x301
+#define COM_CAN (&hcan1)
+
+#define GM6020_RX_ID 0x204U
+#define GM6020_TX_ID 0x1FEU
+#define M3508_RX_ID 0x200U
+#define M3508_TX_ID 0x200U
+
+#define PITCH_ID 1U
+#define PITCH_TX_ID GM6020_TX_ID
+#define PITCH_RX_ID (GM6020_RX_ID + PITCH_ID)
+#define PITCH_CAN (&hcan2)
+
+#define YAW_ID 2U
+#define YAW_TX_ID GM6020_TX_ID
+#define YAW_RX_ID (GM6020_RX_ID + YAW_ID)
+#define YAW_CAN (&hcan1)
+
+#define LEFT_FRICTION_ID 2U
+#define LEFT_FRICTION_TX_ID M3508_TX_ID
+#define LEFT_FRICTION_RX_ID (M3508_RX_ID + LEFT_FRICTION_ID)
+#define LEFT_FRICTION_CAN (&hcan2)
+
+#define RIGHT_FRICTION_ID 1U
+#define RIGHT_FRICTION_TX_ID M3508_TX_ID
+#define RIGHT_FRICTION_RX_ID (M3508_RX_ID + RIGHT_FRICTION_ID)
+#define RIGHT_FRICTION_CAN (&hcan2)
+
+#define FEEDER_ID 0U
+#define FEEDER_RX_ID 0x30U
+#define FEEDER_TX_ID 0x03U
+#define FEEDER_CAN (&hcan1)
+
+#endif
