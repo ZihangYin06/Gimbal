@@ -25,7 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "INS.hpp"
+#include "spi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +46,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+static INS_Task_Config_t g_ins_task_config = {
+  .hspi = &hspi1,
+  .calibrate = true,
+};
 /* USER CODE END Variables */
 /* Definitions for INSTask */
 osThreadId_t INSTaskHandle;
@@ -68,6 +72,13 @@ const osThreadAttr_t ShootTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for BoardComTask */
+osThreadId_t BoardComTaskHandle;
+const osThreadAttr_t BoardComTask_attributes = {
+  .name = "BoardComTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityRealtime,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -77,7 +88,9 @@ const osThreadAttr_t ShootTask_attributes = {
 void StartINSTask(void *argument);
 void StartGimbalTask(void *argument);
 void StartShootTask(void *argument);
+void StartBoardComTask(void *argument);
 
+extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /**
@@ -108,13 +121,18 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* creation of INSTask */
-  INSTaskHandle = osThreadNew(StartINSTask, NULL, &INSTask_attributes);
+  /* 任务参数 &g_ins_task_config 已同步到 CubeMX 任务配置 Arguments 栏(Gimbal.ioc FREERTOS.Tasks01),
+     重新生成代码时不会丢失 */
+  INSTaskHandle = osThreadNew(StartINSTask, &g_ins_task_config, &INSTask_attributes);
 
   /* creation of GimbalTask */
   GimbalTaskHandle = osThreadNew(StartGimbalTask, NULL, &GimbalTask_attributes);
 
   /* creation of ShootTask */
   ShootTaskHandle = osThreadNew(StartShootTask, NULL, &ShootTask_attributes);
+
+  /* creation of BoardComTask */
+  BoardComTaskHandle = osThreadNew(StartBoardComTask, NULL, &BoardComTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -135,6 +153,8 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_StartINSTask */
 __weak void StartINSTask(void *argument)
 {
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN StartINSTask */
   /* Infinite loop */
   for(;;)
@@ -178,6 +198,24 @@ __weak void StartShootTask(void *argument)
     osDelay(1);
   }
   /* USER CODE END StartShootTask */
+}
+
+/* USER CODE BEGIN Header_StartBoardComTask */
+/**
+* @brief Function implementing the BoardComTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartBoardComTask */
+__weak void StartBoardComTask(void *argument)
+{
+  /* USER CODE BEGIN StartBoardComTask */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END StartBoardComTask */
 }
 
 /* Private application code --------------------------------------------------*/

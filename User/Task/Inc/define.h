@@ -1,9 +1,13 @@
 #ifndef _DEFINE_H_
 #define _DEFINE_H_
 
-#define COM_RX_ID 0x300
-#define COM_TX_ID 0x301
-#define COM_CAN (&hcan1)
+#define DR16_COM_RX_ID 0x300
+#define DR16_COM_TX_ID 0x301
+#define DR16_COM_CAN (&hcan1)
+
+#define YAW_COM_RX_ID 0x302
+#define YAW_COM_TX_ID 0x303
+#define YAW_COM_CAN (&hcan1)
 
 #define GM6020_RX_ID 0x204U
 #define GM6020_TX_ID 0x1FEU

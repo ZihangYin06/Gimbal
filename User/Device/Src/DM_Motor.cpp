@@ -1,18 +1,25 @@
+/**
+ ******************************************************************************
+ * @file    DM_Motor.cpp
+ * @brief   达妙 DM 系列电机驱动实现（MIT 协议编解码 + 多圈解环绕）
+ ******************************************************************************
+ */
 #include "DM_Motor.hpp"
 
-static constexpr float P_MIN = -5.23599f;
-static constexpr float P_MAX = 5.23599f;
+#include "cmsis_os.h"
+#include "define.h" /* JOINT_MOTOR_COUNT / JOINT_RX_ID */
+
+/* MIT 协议各物理量的编码量程（与电机调试助手配置一致） */
+static constexpr float P_MIN = -12.5f;
+static constexpr float P_MAX = 12.5f;
 static constexpr float V_MIN = -30.0f;
 static constexpr float V_MAX = 30.0f;
 static constexpr float KP_MIN = 0.0f;
 static constexpr float KP_MAX = 500.0f;
 static constexpr float KD_MIN = 0.0f;
 static constexpr float KD_MAX = 5.0f;
-static constexpr float T_MIN = -10.0f;
-static constexpr float T_MAX = 10.0f;
-
-// 全局拨弹电机对象定义
-DMMotor FEEDER_Motor;
+static constexpr float T_MIN = -7.0f;
+static constexpr float T_MAX = 7.0f;
 
 static float uint_to_float(int x_int, float x_min, float x_max, int bits)
 {
@@ -28,59 +35,79 @@ static int float_to_uint(float x_float, float x_min, float x_max, int bits)
     return (int)((x_float - offset) * ((float)((1 << bits) - 1)) / span);
 }
 
+static float clampf(float x, float low, float high)
+{
+    if (x < low)
+        return low;
+    if (x > high)
+        return high;
+    return x;
+}
+
+/* 使能帧：FF FF FF FF FF FF FF FC */
 void DMMotor::Enable(CAN_HandleTypeDef *phcan, uint32_t id)
 {
-    uint8_t txDATA[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
-    CANSend(phcan, id, txDATA, 8);
+    uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
+    CANSend(phcan, id, tx_data, 8);
 }
 
+/* 失能帧：FF FF FF FF FF FF FF FD */
 void DMMotor::Disable(CAN_HandleTypeDef *phcan, uint32_t id)
 {
-    uint8_t txDATA[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
-    CANSend(phcan, id, txDATA, 8);
+    uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
+    CANSend(phcan, id, tx_data, 8);
 }
 
+/*
+ * MIT 控制帧：目标位置/速度/Kp/Kd/前馈力矩按固定位域打包。
+ * 入参先钳位到协议量程——超范围值经 float_to_uint 会回绕成
+ * 完全错误的命令（比如巨大的位置跳变），宁可饱和也不可回绕。
+ */
 void DMMotor::MITCmd(CAN_HandleTypeDef *phcan, uint32_t id,
                      float pos, float vel, float KP, float KD, float torq)
 {
     uint16_t pos_tmp, vel_tmp, kp_tmp, kd_tmp, tor_tmp;
-    pos_tmp = float_to_uint(pos, P_MIN, P_MAX, 16);
-    vel_tmp = float_to_uint(vel, V_MIN, V_MAX, 12);
-    kp_tmp = float_to_uint(KP, KP_MIN, KP_MAX, 12);
-    kd_tmp = float_to_uint(KD, KD_MIN, KD_MAX, 12);
-    tor_tmp = float_to_uint(torq, T_MIN, T_MAX, 12);
+    pos_tmp = (uint16_t)float_to_uint(clampf(pos, P_MIN, P_MAX), P_MIN, P_MAX, 16);
+    vel_tmp = (uint16_t)float_to_uint(clampf(vel, V_MIN, V_MAX), V_MIN, V_MAX, 12);
+    kp_tmp = (uint16_t)float_to_uint(clampf(KP, KP_MIN, KP_MAX), KP_MIN, KP_MAX, 12);
+    kd_tmp = (uint16_t)float_to_uint(clampf(KD, KD_MIN, KD_MAX), KD_MIN, KD_MAX, 12);
+    tor_tmp = (uint16_t)float_to_uint(clampf(torq, T_MIN, T_MAX), T_MIN, T_MAX, 12);
 
-    uint8_t txDATA[8];
-    txDATA[0] = (pos_tmp >> 8);
-    txDATA[1] = pos_tmp;
-    txDATA[2] = (vel_tmp >> 4);
-    txDATA[3] = ((vel_tmp & 0xF) << 4) | (kp_tmp >> 8);
-    txDATA[4] = kp_tmp;
-    txDATA[5] = (kd_tmp >> 4);
-    txDATA[6] = ((kd_tmp & 0xF) << 4) | (tor_tmp >> 8);
-    txDATA[7] = tor_tmp;
+    uint8_t tx_data[8];
+    tx_data[0] = (uint8_t)(pos_tmp >> 8);
+    tx_data[1] = (uint8_t)(pos_tmp);
+    tx_data[2] = (uint8_t)(vel_tmp >> 4);
+    tx_data[3] = (uint8_t)(((vel_tmp & 0xF) << 4) | (kp_tmp >> 8));
+    tx_data[4] = (uint8_t)(kp_tmp);
+    tx_data[5] = (uint8_t)(kd_tmp >> 4);
+    tx_data[6] = (uint8_t)(((kd_tmp & 0xF) << 4) | (tor_tmp >> 8));
+    tx_data[7] = (uint8_t)(tor_tmp);
 
-    CANSend(phcan, id, txDATA, 8);
+    CANSend(phcan, id, tx_data, 8);
 }
 
-void DMMotor::GetInfo(uint8_t *rx_buff)
+/*
+ * 反馈帧解码 + 多圈解环绕。
+ * pos 量化周期为 (P_MAX - P_MIN) = 25 rad，用单帧增量折叠到
+ * ±半周期内累加，任意连续转速下 accumulate_angle 都保持连续。
+ */
+void DMMotor::DecodeFeedback(uint8_t *rx_buff)
 {
     state = (rx_buff[0]) >> 4;
     pos_last = pos;
-    p_int = (rx_buff[1] << 8) | rx_buff[2];
-    v_int = (rx_buff[3] << 4) | (rx_buff[4] >> 4);
-    t_int = ((rx_buff[4] & 0xF) << 8) | rx_buff[5];
-
-    pos = uint_to_float(p_int, P_MIN, P_MAX, 16);
-    vel = uint_to_float(v_int, V_MIN, V_MAX, 12);
-    tor = uint_to_float(t_int, T_MIN, T_MAX, 12);
+    pos = uint_to_float((rx_buff[1] << 8) | rx_buff[2], P_MIN, P_MAX, 16);
+    vel = uint_to_float((rx_buff[3] << 4) | (rx_buff[4] >> 4), V_MIN, V_MAX, 12);
+    tor = uint_to_float(((rx_buff[4] & 0xF) << 8) | rx_buff[5], T_MIN, T_MAX, 12);
     Tmos = (float)rx_buff[6];
     Tcoil = (float)rx_buff[7];
 
-    if ((pos - pos_last) > 5.23599f)
-        circle_number--;
-    else if ((pos - pos_last) < -5.23599f)
-        circle_number++;
-
-    accumulate_angle = circle_number * 10.47198f + pos;
+    float delta = pos - pos_last;
+    if (delta > 0.5f * (P_MAX - P_MIN))
+        delta -= (P_MAX - P_MIN);
+    else if (delta < -0.5f * (P_MAX - P_MIN))
+        delta += (P_MAX - P_MIN);
+    accumulate_angle += delta;
 }
+
+/* 全局 DM 电机对象定义（云台：拨弹轮一台） */
+DMMotor FEEDER_Motor;

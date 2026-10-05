@@ -3,6 +3,7 @@
 
 #include "cmsis_os.h"
 #include "GimbalTask.hpp"
+#include "bsp_dr16.h"
 
 #ifdef __cplusplus
 extern "C"

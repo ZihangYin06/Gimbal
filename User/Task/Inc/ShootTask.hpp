@@ -9,5 +9,6 @@
 
 void Shoot_Init(void);
 void Shoot_Update(void);
+void Shoot_Standby(void);
 
 #endif

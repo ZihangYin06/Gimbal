@@ -3,7 +3,10 @@
 
 #include "bsp_can.h"
 #include "define.h"
+#include "bsp_dr16.h"
+#include "DJI_Motor.hpp"
 
-void Board_Send(uint8_t *data);
+void Board_Dr16_Data_Sent();
+void Board_Yaw_Data_Sent();
 
 #endif
