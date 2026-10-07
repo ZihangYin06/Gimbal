@@ -12,7 +12,7 @@ void Shoot_Init(void)
     RIGHT_FRICTION_PID.SetParams(40.0f, 0.0f, 0.0f, 17000.0f, 17000.0f);
     while (!FEEDER_Motor.state)
     {
-        FEEDER_Motor.Enable(FEEDER_CAN, FEEDER_TX_ID);
+        FEEDER_Motor.Enable();
     }
 }
 
@@ -21,8 +21,8 @@ void Shoot_Update(void)
     LEFT_FRICTION_PID.SpeedCalc(600.0f, LEFT_FRICTION_Motor.speed);
     RIGHT_FRICTION_PID.SpeedCalc(-600.0f, RIGHT_FRICTION_Motor.speed);
 
-    LEFT_FRICTION_Motor.SetCurrent(MotorModel::M3508, LEFT_FRICTION_CAN, LEFT_FRICTION_ID, (int16_t)LEFT_FRICTION_PID.GetOutput());
-    RIGHT_FRICTION_Motor.SetCurrent(MotorModel::M3508, RIGHT_FRICTION_CAN, RIGHT_FRICTION_ID, (int16_t)RIGHT_FRICTION_PID.GetOutput());
+    LEFT_FRICTION_Motor.SetCurrent((int16_t)LEFT_FRICTION_PID.GetOutput());
+    RIGHT_FRICTION_Motor.SetCurrent((int16_t)RIGHT_FRICTION_PID.GetOutput());
 
     if (dr16_remote.wheel > 1530U && (!shoot_flag))
     {
@@ -50,16 +50,16 @@ void Shoot_Update(void)
         shoot_count++;
     }
 
-    FEEDER_Motor.MITCmd(FEEDER_CAN, FEEDER_TX_ID, 0, feeder_speed, 0, 1, 0);
+    FEEDER_Motor.MITCmd(0, feeder_speed, 0, 1, 0);
 
-    LEFT_FRICTION_Motor.StartMotor(MotorModel::M3508, LEFT_FRICTION_CAN);
+    LEFT_FRICTION_Motor.StartMotor();
 }
 
 void Shoot_Standby(void)
 {
-    LEFT_FRICTION_Motor.SetCurrent(MotorModel::M3508, LEFT_FRICTION_CAN, LEFT_FRICTION_ID, 0);
-    RIGHT_FRICTION_Motor.SetCurrent(MotorModel::M3508, RIGHT_FRICTION_CAN, RIGHT_FRICTION_ID, 0);
-    FEEDER_Motor.MITCmd(FEEDER_CAN, FEEDER_TX_ID, 0, 0, 0, 1, 0);
+    LEFT_FRICTION_Motor.SetCurrent(0);
+    RIGHT_FRICTION_Motor.SetCurrent(0);
+    FEEDER_Motor.MITCmd(0, 0, 0, 1, 0);
 
-    LEFT_FRICTION_Motor.StartMotor(MotorModel::M3508, LEFT_FRICTION_CAN);
+    LEFT_FRICTION_Motor.StartMotor();
 }

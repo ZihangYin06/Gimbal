@@ -9,8 +9,8 @@ static bool startflag = false;
 
 void Gimbal_StartMotors(void)
 {
-    YAW_Motor.StartMotor(MotorModel::GM6020, YAW_CAN);
-    PITCH_Motor.StartMotor(MotorModel::GM6020, PITCH_CAN);
+    YAW_Motor.StartMotor();
+    PITCH_Motor.StartMotor();
 }
 void Gimbal_Init(void)
 {
@@ -36,7 +36,7 @@ void Gimbal_UpDate(void)
                             YAW_target_angle,
                             INS.YawTotalAngle,
                             YAW_Motor.speed);
-    YAW_Motor.SetCurrent(MotorModel::GM6020, YAW_CAN, YAW_ID, (int16_t)YAW_Speed_PID.GetOutput());
+    YAW_Motor.SetCurrent((int16_t)YAW_Speed_PID.GetOutput());
 
     PITCH_Angle_PID.GravityAngleCalc(PITCH_Speed_PID,
                                      60.0f,
@@ -44,15 +44,15 @@ void Gimbal_UpDate(void)
                                      ((dr16_remote.ch1 - 364U) / 1320.0f * 40.0f - 20.0f),
                                      INS.Pitch,
                                      PITCH_Motor.speed);
-    PITCH_Motor.SetCurrent(MotorModel::GM6020, PITCH_CAN, PITCH_ID, (int16_t)PITCH_Speed_PID.GetOutput());
+    PITCH_Motor.SetCurrent((int16_t)PITCH_Speed_PID.GetOutput());
 
     Gimbal_StartMotors();
 }
 
 void Gimbal_Standby(void)
 {
-    YAW_Motor.SetCurrent(MotorModel::GM6020, YAW_CAN, YAW_ID, 0);
-    PITCH_Motor.SetCurrent(MotorModel::GM6020, PITCH_CAN, PITCH_ID, 0);
+    YAW_Motor.SetCurrent(0);
+    PITCH_Motor.SetCurrent(0);
 
     Gimbal_StartMotors();
 

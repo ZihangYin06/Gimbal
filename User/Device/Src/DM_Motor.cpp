@@ -7,7 +7,6 @@
 #include "DM_Motor.hpp"
 
 #include "cmsis_os.h"
-#include "define.h" /* JOINT_MOTOR_COUNT / JOINT_RX_ID */
 
 /* MIT 协议各物理量的编码量程（与电机调试助手配置一致） */
 static constexpr float P_MIN = -12.5f;
@@ -45,17 +44,17 @@ static float clampf(float x, float low, float high)
 }
 
 /* 使能帧：FF FF FF FF FF FF FF FC */
-void DMMotor::Enable(CAN_HandleTypeDef *phcan, uint32_t id)
+void DMMotor::Enable(void)
 {
     uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
-    CANSend(phcan, id, tx_data, 8);
+    CANSend(phcan, tx_id, tx_data, 8);
 }
 
 /* 失能帧：FF FF FF FF FF FF FF FD */
-void DMMotor::Disable(CAN_HandleTypeDef *phcan, uint32_t id)
+void DMMotor::Disable(void)
 {
     uint8_t tx_data[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
-    CANSend(phcan, id, tx_data, 8);
+    CANSend(phcan, tx_id, tx_data, 8);
 }
 
 /*
@@ -63,8 +62,7 @@ void DMMotor::Disable(CAN_HandleTypeDef *phcan, uint32_t id)
  * 入参先钳位到协议量程——超范围值经 float_to_uint 会回绕成
  * 完全错误的命令（比如巨大的位置跳变），宁可饱和也不可回绕。
  */
-void DMMotor::MITCmd(CAN_HandleTypeDef *phcan, uint32_t id,
-                     float pos, float vel, float KP, float KD, float torq)
+void DMMotor::MITCmd(float pos, float vel, float KP, float KD, float torq)
 {
     uint16_t pos_tmp, vel_tmp, kp_tmp, kd_tmp, tor_tmp;
     pos_tmp = (uint16_t)float_to_uint(clampf(pos, P_MIN, P_MAX), P_MIN, P_MAX, 16);
@@ -83,7 +81,7 @@ void DMMotor::MITCmd(CAN_HandleTypeDef *phcan, uint32_t id,
     tx_data[6] = (uint8_t)(((kd_tmp & 0xF) << 4) | (tor_tmp >> 8));
     tx_data[7] = (uint8_t)(tor_tmp);
 
-    CANSend(phcan, id, tx_data, 8);
+    CANSend(phcan, tx_id, tx_data, 8);
 }
 
 /*
@@ -109,5 +107,6 @@ void DMMotor::DecodeFeedback(uint8_t *rx_buff)
     accumulate_angle += delta;
 }
 
-/* 全局 DM 电机对象定义（云台：拨弹轮一台） */
-DMMotor FEEDER_Motor;
+/* 全局 DM 电机对象定义（身份登记表，原 define.h 的 FEEDER_* 并入于此）：
+ * 拨弹轮，CAN1，控制帧 TX 0x03 / 反馈帧 RX 0x30 */
+DMMotor FEEDER_Motor(&hcan1, 0x03U, 0x30U);
